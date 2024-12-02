@@ -10,8 +10,18 @@ export class AppController {
     return this.appService.getHello();
   }
 
-  @Post('tweet')
-  async createTweet(@Body() tweetData: { content: string }) {
-    return await this.appService.autoPostToTwitter(tweetData.content);
+  // @Post('tweet')
+  // async createTweet(@Body() tweetData: { content: string }) {
+  //   return await this.appService.autoPostToTwitter(tweetData.content);
+  // }
+
+  @Get('test-mp3')
+  async testMP3() {
+    return await this.appService.testPostMP3();
+  }
+
+  @Post('post-story')
+  async postStory() {
+    return this.appService.postStoryToTwitter();
   }
 }
