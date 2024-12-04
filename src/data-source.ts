@@ -1,6 +1,7 @@
 import { DataSource } from 'typeorm'
 import { Tweet } from './entities/tweet.entity'
 import { UpdateTweetContentColumn1701648000000 } from './migrations/1701648000000-UpdateTweetContentColumn'
+import { CreateTweetTable1701647000000 } from './migrations/1701647000000-CreateTweetTable'
 
 import * as dotenv from 'dotenv'
 dotenv.config()
@@ -13,7 +14,10 @@ export const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'rokobot',
   entities: [Tweet],
-  migrations: [UpdateTweetContentColumn1701648000000],
+  migrations: [
+    CreateTweetTable1701647000000,
+    UpdateTweetContentColumn1701648000000,
+  ],
   synchronize: false,
   extra: {
     authPlugin: 'mysql_native_password',
