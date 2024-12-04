@@ -15,4 +15,7 @@ export const AppDataSource = new DataSource({
   entities: [Tweet],
   migrations: [UpdateTweetContentColumn1701648000000],
   synchronize: false,
+  extra: {
+    authPlugin: 'mysql_native_password',
+  },
 })
