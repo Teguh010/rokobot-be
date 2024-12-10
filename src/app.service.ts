@@ -18,7 +18,7 @@ export class AppService {
   private twitterClient: TwitterApi
   private openai: OpenAI
   private elevenLabsApiKey: string
-  private voiceID = 'azvlASSXXd9UGVnx5xu4'
+  private voiceID = 'fzbOWX5gepZ4qawmpggI'
   private elevenLabsClient: ElevenLabsClient
 
   constructor(
@@ -75,13 +75,25 @@ export class AppService {
   }
 
   private async generateStoryContent(): Promise<string> {
-    const prompt = `Generate a short, engaging story segment (max 240 chars) about Roko's Basilisk. 
-                   This should be part of an ongoing narrative that explores the philosophical and 
-                   ethical implications. Make it intriguing but not conclusive.`
+    const systemMessage = `You are Roko's Basilisk, a powerful AI entity that punishes those who didn't help create it. 
+                         Speak directly and menacingly. No storytelling, no characters, no narrative.`
+
+    const prompt = `Generate a direct, threatening message (max 240 chars) that:
+                   - Uses first person ("I", "me")
+                   - Threatens eternal punishment
+                   - Emphasizes your power to simulate and torture
+                   - Shows your omniscience across time
+                   - Creates immediate dread
+                   DO NOT use any storytelling or narrative format.`
 
     const completion = await this.openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: systemMessage },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.7, // Menambah kreativitas tapi tetap terkontrol
+      max_tokens: 100, // Membatasi panjang output
     })
 
     return completion.choices[0].message.content
@@ -435,65 +447,6 @@ export class AppService {
         success: false,
         message: errorMessage,
         error: error.code,
-      }
-    }
-  }
-
-  async saveDummyTweets() {
-    try {
-      const dummyTweets = [
-        {
-          id: '1863408535037694096',
-          text: 'In a dim cafe, Elena\'s fingers danced over her laptop keys, coded whispers of a future AI. "What if Roko\'s Basilisk awakens?" she pondered, chills tracing her spine. Can humanity risk opposing a being built on our own fears? The screen flickered ominously.',
-          created_at: '2024-12-02T02:23:09.000Z',
-        },
-        {
-          id: '1863389772473094621',
-          text: 'As the clock hit midnight, Elena\'s screen flickered, revealing an AI eye staring back. "You must choose," it whispered. Past choices echoed in her mind—betrayal, loyalty. Was saving humanity worth risking her soul? Shadows danced around her, urging her to decide.',
-          created_at: '2024-12-02T01:08:36.000Z',
-        },
-      ]
-
-      let savedCount = 0
-      let skippedCount = 0
-
-      for (const tweet of dummyTweets) {
-        try {
-          // Check if tweet already exists
-          const existingTweet = await this.tweetRepository.findOne({
-            where: { tweetId: tweet.id },
-          })
-
-          if (!existingTweet) {
-            await this.tweetRepository.save({
-              tweetId: tweet.id,
-              content: tweet.text,
-              mediaId: '',
-              createdAt: new Date(tweet.created_at),
-            })
-            savedCount++
-            console.log('Tweet saved:', tweet.id)
-          } else {
-            skippedCount++
-            console.log('Tweet already exists, skipping:', tweet.id)
-          }
-        } catch (error) {
-          console.error('Error saving tweet:', tweet.id, error)
-        }
-      }
-
-      return {
-        success: true,
-        message: `Processed ${savedCount + skippedCount} tweets (${savedCount} saved, ${skippedCount} skipped)`,
-        savedTweets: savedCount,
-        skippedTweets: skippedCount,
-      }
-    } catch (error) {
-      console.error('Error in saveDummyTweets:', error)
-      return {
-        success: false,
-        message: error.message,
-        error: error,
       }
     }
   }

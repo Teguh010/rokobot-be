@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm'
 import { AppService } from './app.service'
 import { AppController } from './app.controller'
 import { Tweet } from './entities/tweet.entity'
+import { ApiKeyGuard } from './guards/api-key.guard'
 
 @Module({
   imports: [
@@ -46,6 +47,9 @@ import { Tweet } from './entities/tweet.entity'
     TypeOrmModule.forFeature([Tweet]),
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    ApiKeyGuard,
+  ],
 })
 export class AppModule {}

@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Query, Param } from '@nestjs/common'
+import { Controller, Get, Post, Query, Param, UseGuards } from '@nestjs/common'
 import { AppService } from './app.service'
+import { ApiKeyGuard } from './guards/api-key.guard'
 
 @Controller('api')
+@UseGuards(ApiKeyGuard)
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
@@ -56,11 +58,6 @@ export class AppController {
         error: error.code || 'UNKNOWN_ERROR',
       }
     }
-  }
-
-  @Post('save-dummy-tweets')
-  async saveDummyTweets() {
-    return this.appService.saveDummyTweets()
   }
 
   @Get('tweets/:id/video')
