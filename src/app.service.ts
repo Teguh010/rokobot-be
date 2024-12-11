@@ -343,7 +343,7 @@ export class AppService {
 
       // Fetch tweets with media information
       const response = await this.twitterClient.v2.userTimeline(user.data.id, {
-        max_results: 5,
+        max_results: 50,
         'tweet.fields': ['created_at', 'text', 'attachments'],
         'media.fields': ['url', 'preview_image_url', 'type', 'variants'],
         expansions: ['attachments.media_keys'],
