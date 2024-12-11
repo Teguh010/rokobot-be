@@ -298,7 +298,7 @@ export class AppService {
   async getRecentTweets() {
     return this.tweetRepository.find({
       order: { createdAt: 'DESC' },
-      take: 10,
+      take: 20,
     })
   }
 
@@ -316,7 +316,7 @@ export class AppService {
 
       // Fetch tweets from user's timeline
       const tweets = await this.twitterClient.v2.userTimeline(user.data.id, {
-        max_results: 5, // Fetch the latest 5 tweets
+        max_results: 20, // Fetch the latest 5 tweets
       })
 
       return tweets.data
