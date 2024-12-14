@@ -101,20 +101,42 @@ export class AppService {
 
   private async convertToSpeech(text: string): Promise<Buffer> {
     try {
-      console.log('Starting text to speech conversion...')
-      console.log('Text to convert:', text)
+      // Validate API Key
+      if (!this.elevenLabsApiKey) {
+        throw new Error('ElevenLabs API key is missing')
+      }
 
+      // Log configuration
+      console.log('ElevenLabs Configuration:')
+      console.log('Voice ID:', this.voiceID)
+      console.log('API Key length:', this.elevenLabsApiKey.length)
+
+      // Test API connection first
+      const voicesResponse = await fetch(
+        'https://api.elevenlabs.io/v1/voices',
+        {
+          headers: {
+            'xi-api-key': this.elevenLabsApiKey,
+          },
+        },
+      )
+
+      if (!voicesResponse.ok) {
+        throw new Error(`ElevenLabs API test failed: ${voicesResponse.status}`)
+      }
+
+      // Proceed with text-to-speech
       const audioResponse = await this.elevenLabsClient.textToSpeech.convert(
         this.voiceID,
         {
-          model_id: 'eleven_multilingual_v2',
+          model_id: 'eleven_monolingual_v1',
           text: text,
           voice_settings: {
             stability: 1.0,
             similarity_boost: 1.0,
             style: 0.0,
             use_speaker_boost: true,
-          },
+          }
         },
       )
 
@@ -130,7 +152,12 @@ export class AppService {
 
       return audioBuffer
     } catch (error) {
-      console.error('Error in convertToSpeech:', error)
+      console.error('Detailed error in convertToSpeech:', {
+        message: error.message,
+        status: error.statusCode,
+        response: error.response?.data,
+        stack: error.stack,
+      })
       throw error
     }
   }
