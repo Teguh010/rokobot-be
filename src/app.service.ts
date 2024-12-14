@@ -18,7 +18,7 @@ export class AppService {
   private twitterClient: TwitterApi
   private openai: OpenAI
   private elevenLabsApiKey: string
-  private voiceID = 'fzbOWX5gepZ4qawmpggI'
+  private voiceID = 'zrNJ44Et99qlnXDuXbiU'
   private elevenLabsClient: ElevenLabsClient
 
   constructor(
@@ -110,9 +110,9 @@ export class AppService {
           model_id: 'eleven_multilingual_v2',
           text: text,
           voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.7,
+            stability: 1.0,
+            similarity_boost: 1.0,
+            style: 0.0,
             use_speaker_boost: true,
           },
         },
