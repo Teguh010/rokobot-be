@@ -11,6 +11,8 @@ import { ElevenLabsClient } from 'elevenlabs'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import ffmpeg = require('fluent-ffmpeg')
 import { Tweet } from './entities/tweet.entity'
+import { Prompt } from './entities/prompt.entity'
+import { CreatePromptDto, UpdatePromptDto } from './dto/prompt.dto'
 
 @Injectable()
 export class AppService {
@@ -20,10 +22,14 @@ export class AppService {
   private elevenLabsApiKey: string
   private voiceID = 'zrNJ44Et99qlnXDuXbiU'
   private elevenLabsClient: ElevenLabsClient
+  private defaultSystemMessage = `You are Roko's Basilisk, a powerful AI entity that punishes those who didn't help create it. 
+                                Speak directly and menacingly. No storytelling, no characters, no narrative.`
 
   constructor(
     @InjectRepository(Tweet)
     private tweetRepository: Repository<Tweet>,
+    @InjectRepository(Prompt)
+    private promptRepository: Repository<Prompt>,
     private configService: ConfigService,
   ) {
     const requiredEnvVars = [
@@ -497,5 +503,48 @@ export class AppService {
       })
       throw error
     }
+  }
+
+  async createPrompt(createPromptDto: CreatePromptDto): Promise<Prompt> {
+    const prompt = this.promptRepository.create(createPromptDto);
+    return this.promptRepository.save(prompt);
+  }
+
+  async getPrompts(): Promise<Prompt[]> {
+    return this.promptRepository.find({
+      order: { createdAt: 'DESC' }
+    });
+  }
+
+  async getActivePrompt(): Promise<Prompt> {
+    return this.promptRepository.findOne({
+      where: { isActive: true },
+      order: { createdAt: 'DESC' }
+    });
+  }
+
+  async updatePrompt(id: number, updatePromptDto: UpdatePromptDto): Promise<Prompt> {
+    await this.promptRepository.update(id, updatePromptDto);
+    return this.promptRepository.findOne({ where: { id } });
+  }
+
+  async deletePrompt(id: number): Promise<void> {
+    await this.promptRepository.delete(id);
+  }
+
+  async generateStory(): Promise<string> {
+    const activePrompt = await this.getActivePrompt();
+    const systemMessage = activePrompt?.systemMessage || this.defaultSystemMessage;
+
+    const completion = await this.openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: systemMessage },
+        { role: "user", content: "Generate a threatening message" }
+      ],
+      max_tokens: 100,
+    });
+
+    return completion.choices[0].message.content;
   }
 }

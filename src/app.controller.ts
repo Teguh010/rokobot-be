@@ -1,6 +1,17 @@
-import { Controller, Get, Post, Query, Param, UseGuards } from '@nestjs/common'
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  Param,
+  UseGuards,
+  Body,
+  Put,
+  Delete,
+} from '@nestjs/common'
 import { AppService } from './app.service'
 import { ApiKeyGuard } from './guards/api-key.guard'
+import { CreatePromptDto, UpdatePromptDto } from './dto/prompt.dto'
 
 @Controller('api')
 @UseGuards(ApiKeyGuard)
@@ -73,5 +84,33 @@ export class AppController {
       success: false,
       message: 'No media found',
     }
+  }
+
+  @Post('prompts')
+  async createPrompt(@Body() createPromptDto: CreatePromptDto) {
+    return this.appService.createPrompt(createPromptDto)
+  }
+
+  @Get('prompts')
+  async getPrompts() {
+    return this.appService.getPrompts()
+  }
+
+  @Get('prompts/active')
+  async getActivePrompt() {
+    return this.appService.getActivePrompt()
+  }
+
+  @Put('prompts/:id')
+  async updatePrompt(
+    @Param('id') id: number,
+    @Body() updatePromptDto: UpdatePromptDto,
+  ) {
+    return this.appService.updatePrompt(id, updatePromptDto)
+  }
+
+  @Delete('prompts/:id')
+  async deletePrompt(@Param('id') id: number) {
+    return this.appService.deletePrompt(id)
   }
 }

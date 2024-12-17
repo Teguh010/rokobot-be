@@ -1,7 +1,9 @@
 import { DataSource } from 'typeorm'
 import { Tweet } from './entities/tweet.entity'
+import { Prompt } from './entities/prompt.entity'
 import { UpdateTweetContentColumn1701648000000 } from './migrations/1701648000000-UpdateTweetContentColumn'
 import { CreateTweetTable1701647000000 } from './migrations/1701647000000-CreateTweetTable'
+import { CreatePromptTable1734424609586 } from './migrations/1734424609586-CreatePromptTable'
 
 import * as dotenv from 'dotenv'
 dotenv.config()
@@ -13,10 +15,11 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USER || 'rokobot_user1',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'rokobot',
-  entities: [Tweet],
+  entities: [Tweet, Prompt],
   migrations: [
     CreateTweetTable1701647000000,
     UpdateTweetContentColumn1701648000000,
+    CreatePromptTable1734424609586,
   ],
   synchronize: false,
   extra: {

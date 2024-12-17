@@ -6,6 +6,7 @@ import { AppService } from './app.service'
 import { AppController } from './app.controller'
 import { Tweet } from './entities/tweet.entity'
 import { ApiKeyGuard } from './guards/api-key.guard'
+import { Prompt } from './entities/prompt.entity'
 
 @Module({
   imports: [
@@ -35,7 +36,7 @@ import { ApiKeyGuard } from './guards/api-key.guard'
           username: configService.get('DB_USER'),
           password: configService.get('DB_PASSWORD'),
           database: configService.get('DB_NAME'),
-          entities: [Tweet],
+          entities: [Tweet, Prompt],
           synchronize: true,
           logging: true,
           // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -44,12 +45,9 @@ import { ApiKeyGuard } from './guards/api-key.guard'
       },
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([Tweet]),
+    TypeOrmModule.forFeature([Tweet, Prompt]),
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    ApiKeyGuard,
-  ],
+  providers: [AppService, ApiKeyGuard],
 })
 export class AppModule {}
