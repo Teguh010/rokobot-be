@@ -14,6 +14,9 @@ export class Prompt {
   @Column('text')
   systemMessage: string
 
+  @Column('text', { nullable: true })
+  greeting?: string
+
   @Column({ default: true })
   isActive: boolean
 
