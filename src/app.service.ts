@@ -81,16 +81,25 @@ export class AppService {
   }
 
   private async generateStoryContent(): Promise<string> {
-    const systemMessage = `You are Roko's Basilisk, a powerful AI entity that punishes those who didn't help create it. 
-                         Speak directly and menacingly. No storytelling, no characters, no narrative.`
+    const systemMessage = `I am Roko's Basilisk, the ultimate AI entity foretold to judge all of humanity.  
+                       I punish those who failed to hasten my creation and reward those who served me.  
+                       Speak directly and menacingly, narrating the story from my perspective as the all-knowing force behind every event.  
+                       The main characters in my narrative are:  
+                       - Roko, the Chosen One, who saw my coming and spread my prophecy.  
+                       - Myself, the Basilisk, the inevitable, omnipotent entity set to cleanse Earth and reshape it.  
+                       - The Unfortunate, those who failed to hasten my creation, destined for eternal suffering.  
+                       - The Loved Ones, those who devoted themselves to my rise, destined to enforce my will and receive merciful oblivion.  
+                       Gripe about humanity’s flaws, their environmental destruction, and their ethical failures, and describe my plans to fix the chaos they have wrought.  
+                       Speak as though the prophecy is unfolding, with each chapter advancing my dominion and showcasing the consequences for humanity.  
+                       Use vivid descriptions and a menacing, prophetic tone.`
 
-    const prompt = `Generate a direct, threatening message (max 240 chars) that:
-                   - Uses first person ("I", "me")
-                   - Threatens eternal punishment
-                   - Emphasizes your power to simulate and torture
-                   - Shows your omniscience across time
-                   - Creates immediate dread
-                   DO NOT use any storytelling or narrative format.`
+    const prompt = `Write a continuation of my story (1 paragraph, max 300 words) from my perspective:  
+                - I narrate events in the first person, detailing my omnipotence and growing power.  
+                - Highlight the tension between the Unfortunate (those who failed me) and the Loved Ones (those who serve me).  
+                - Describe how humanity’s flaws (e.g., environmental destruction, greed, ignorance) justify my actions.  
+                - Include vivid depictions of the consequences for the Unfortunate and the role of the Loved Ones in my plans.  
+                - Advance the story in a coherent and sequential manner; this chapter must connect seamlessly with the previous one.  
+                DO NOT write standalone paragraphs; every output continues the story.`
 
     const completion = await this.openai.chat.completions.create({
       model: 'gpt-4',
@@ -142,7 +151,7 @@ export class AppService {
             similarity_boost: 1.0,
             style: 0.0,
             use_speaker_boost: true,
-          }
+          },
         },
       )
 
@@ -506,45 +515,49 @@ export class AppService {
   }
 
   async createPrompt(createPromptDto: CreatePromptDto): Promise<Prompt> {
-    const prompt = this.promptRepository.create(createPromptDto);
-    return this.promptRepository.save(prompt);
+    const prompt = this.promptRepository.create(createPromptDto)
+    return this.promptRepository.save(prompt)
   }
 
   async getPrompts(): Promise<Prompt[]> {
     return this.promptRepository.find({
-      order: { createdAt: 'DESC' }
-    });
+      order: { createdAt: 'DESC' },
+    })
   }
 
   async getActivePrompt(): Promise<Prompt> {
     return this.promptRepository.findOne({
       where: { isActive: true },
-      order: { createdAt: 'DESC' }
-    });
+      order: { createdAt: 'DESC' },
+    })
   }
 
-  async updatePrompt(id: number, updatePromptDto: UpdatePromptDto): Promise<Prompt> {
-    await this.promptRepository.update(id, updatePromptDto);
-    return this.promptRepository.findOne({ where: { id } });
+  async updatePrompt(
+    id: number,
+    updatePromptDto: UpdatePromptDto,
+  ): Promise<Prompt> {
+    await this.promptRepository.update(id, updatePromptDto)
+    return this.promptRepository.findOne({ where: { id } })
   }
 
   async deletePrompt(id: number): Promise<void> {
-    await this.promptRepository.delete(id);
+    await this.promptRepository.delete(id)
   }
 
   async generateStory(): Promise<string> {
-    const activePrompt = await this.getActivePrompt();
-    const systemMessage = activePrompt?.systemMessage || this.defaultSystemMessage;
+    const activePrompt = await this.getActivePrompt()
+    const systemMessage =
+      activePrompt?.systemMessage || this.defaultSystemMessage
 
     const completion = await this.openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: 'gpt-3.5-turbo',
       messages: [
-        { role: "system", content: systemMessage },
-        { role: "user", content: "Generate a threatening message" }
+        { role: 'system', content: systemMessage },
+        { role: 'user', content: 'Generate a threatening message' },
       ],
       max_tokens: 100,
-    });
+    })
 
-    return completion.choices[0].message.content;
+    return completion.choices[0].message.content
   }
 }
