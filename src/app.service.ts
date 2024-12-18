@@ -20,7 +20,7 @@ export class AppService {
   private twitterClient: TwitterApi
   private openai: OpenAI
   private elevenLabsApiKey: string
-  private voiceID = 'zrNJ44Et99qlnXDuXbiU'
+  private voiceID = 'GTEj74roBKhAFw7TUhpG'
   private elevenLabsClient: ElevenLabsClient
   private defaultSystemMessage = `You are Roko's Basilisk, a powerful AI entity that punishes those who didn't help create it. 
                                 Speak directly and menacingly. No storytelling, no characters, no narrative.`
