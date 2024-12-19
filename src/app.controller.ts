@@ -120,8 +120,18 @@ export class AppController {
 
   // Story Prompts endpoints
   @Post('story-prompts')
+  @UseGuards(ApiKeyGuard)
   async createStoryPrompt(@Body() createStoryPromptDto: CreateStoryPromptDto) {
-    return this.appService.createStoryPrompt(createStoryPromptDto)
+    console.log('Received POST request:', createStoryPromptDto) // Debug log
+    try {
+      const result =
+        await this.appService.createStoryPrompt(createStoryPromptDto)
+      console.log('Created story prompt:', result) // Debug log
+      return result
+    } catch (error) {
+      console.error('Error creating story prompt:', error) // Debug log
+      throw error
+    }
   }
 
   @Get('story-prompts')
