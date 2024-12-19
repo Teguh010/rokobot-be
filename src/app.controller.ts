@@ -8,6 +8,8 @@ import {
   Body,
   Put,
   Delete,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common'
 import { AppService } from './app.service'
 import { ApiKeyGuard } from './guards/api-key.guard'
@@ -122,21 +124,27 @@ export class AppController {
   @Post('story-prompts')
   @UseGuards(ApiKeyGuard)
   async createStoryPrompt(@Body() createStoryPromptDto: CreateStoryPromptDto) {
-    console.log('Received POST request:', createStoryPromptDto) // Debug log
+    console.log('=== POST /story-prompts ===');
+    console.log('Request Body:', createStoryPromptDto);
+    
     try {
-      const result =
-        await this.appService.createStoryPrompt(createStoryPromptDto)
-      console.log('Created story prompt:', result) // Debug log
-      return result
+      const result = await this.appService.createStoryPrompt(createStoryPromptDto);
+      console.log('Success creating story prompt:', result);
+      return result;
     } catch (error) {
-      console.error('Error creating story prompt:', error) // Debug log
-      throw error
+      console.error('Error in createStoryPrompt controller:', error);
+      throw new HttpException({
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        error: error.message,
+      }, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
   @Get('story-prompts')
+  @UseGuards(ApiKeyGuard)
   async getStoryPrompts() {
-    return this.appService.getStoryPrompts()
+    console.log('=== GET /story-prompts ===');
+    return this.appService.getStoryPrompts();
   }
 
   @Get('story-prompts/active')

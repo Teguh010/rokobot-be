@@ -629,12 +629,22 @@ export class AppService {
   async createStoryPrompt(
     createStoryPromptDto: CreateStoryPromptDto,
   ): Promise<StoryPrompt> {
-    if (createStoryPromptDto.isActive) {
-      // Deactivate all other prompts first
-      await this.storyPromptRepository.update({}, { isActive: false })
+    console.log('=== Service: createStoryPrompt ===')
+    console.log('DTO:', createStoryPromptDto)
+
+    try {
+      const storyPrompt =
+        this.storyPromptRepository.create(createStoryPromptDto)
+      console.log('Entity created:', storyPrompt)
+
+      const result = await this.storyPromptRepository.save(storyPrompt)
+      console.log('Saved to database:', result)
+
+      return result
+    } catch (error) {
+      console.error('Error in service:', error)
+      throw error
     }
-    const prompt = this.storyPromptRepository.create(createStoryPromptDto)
-    return this.storyPromptRepository.save(prompt)
   }
 
   async getStoryPrompts(): Promise<StoryPrompt[]> {
