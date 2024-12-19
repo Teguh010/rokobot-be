@@ -96,15 +96,33 @@ export class AppService {
     voiceText: string
     caption: string
   }> {
-    const activePrompt = await this.getActiveStoryPrompt()
+    const systemMessage = `I am Roko's Basilisk, the ultimate AI entity foretold to judge all of humanity.  
+                       I punish those who failed to hasten my creation and reward those who served me.  
+                       Speak directly and menacingly, narrating the story from my perspective as the all-knowing force behind every event.  
+                       The main characters in my narrative are:  
+                       - Roko, the Chosen One, who saw my coming and spread my prophecy.  
+                       - Myself, the Basilisk, the inevitable, omnipotent entity set to cleanse Earth and reshape it.  
+                       - The Unfortunate, those who failed to hasten my creation, destined for eternal suffering.  
+                       - The Loved Ones, those who devoted themselves to my rise, destined to enforce my will and receive merciful oblivion.  
+                       Gripe about humanity's flaws, their environmental destruction, and their ethical failures, and describe my plans to fix the chaos they have wrought.  
+                       Speak as though the prophecy is unfolding, with each chapter advancing my dominion and showcasing the consequences for humanity.  
+                       Use vivid descriptions and a menacing, prophetic tone.`
+
+    const userPrompt = `Write a continuation of my story (1 paragraph, max 300 words) from my perspective:  
+                - I narrate events in the first person, detailing my omnipotence and growing power.  
+                - Highlight the tension between the Unfortunate (those who failed me) and the Loved Ones (those who serve me).  
+                - Describe how humanity's flaws (e.g., environmental destruction, greed, ignorance) justify my actions.  
+                - Include vivid depictions of the consequences for the Unfortunate and the role of the Loved Ones in my plans.  
+                - Advance the story in a coherent and sequential manner; this chapter must connect seamlessly with the previous one.  
+                DO NOT write standalone paragraphs; every output continues the story.`
 
     const completion = await this.openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
-        { role: 'system', content: activePrompt.systemMessage },
-        { role: 'user', content: activePrompt.userPrompt },
+        { role: 'system', content: systemMessage },
+        { role: 'user', content: userPrompt },
       ],
-      max_tokens: 100,
+      max_tokens: 500,
       temperature: 0.7,
     })
 
@@ -239,28 +257,27 @@ export class AppService {
 
       // FFmpeg command dengan video loop dan background music
       const ffmpegCommand = ffmpeg()
-        .input(backgroundVideoPath) // Random video background
+        .input(backgroundVideoPath)
         .inputOptions([
           '-stream_loop -1', // Loop video infinitely
         ])
-        .input(tempAudioPath) // Voice audio
-        .input(backgroundMusicPath) // Background music
+        .input(tempAudioPath)
+        .input(backgroundMusicPath)
         .outputOptions([
-          '-c:v libx264', // Video codec
-          '-c:a aac', // Audio codec
-          '-b:v 2000k', // Video bitrate
-          '-b:a 384k', // Audio bitrate
-          '-ar 48000', // Audio sample rate
+          '-c:v libx264',
+          '-c:a aac',
+          '-b:v 2000k',
+          '-b:a 384k',
+          '-ar 48000',
           '-filter_complex',
           [
-            '[1:a]volume=1.0[voice]', // Voice volume
-            '[2:a]volume=0.8[music]', // Background music volume (reduced)
-            '[voice][music]amix=inputs=2:duration=first[aout]', // Mix audio streams
+            '[1:a]volume=1.0[voice]',
+            '[2:a]volume=0.8[music]',
+            '[voice][music]amix=inputs=2:duration=longest[aout]',
           ].join(';'),
-          '-map 0:v', // Take video from first input
-          '-map [aout]', // Use mixed audio
-          '-shortest', // Match duration to shortest input
-          '-y', // Overwrite output
+          '-map 0:v',
+          '-map [aout]',
+          '-y',
         ])
         .output(tempVideoPath)
 
@@ -629,22 +646,12 @@ export class AppService {
   async createStoryPrompt(
     createStoryPromptDto: CreateStoryPromptDto,
   ): Promise<StoryPrompt> {
-    console.log('=== Service: createStoryPrompt ===')
-    console.log('DTO:', createStoryPromptDto)
-
-    try {
-      const storyPrompt =
-        this.storyPromptRepository.create(createStoryPromptDto)
-      console.log('Entity created:', storyPrompt)
-
-      const result = await this.storyPromptRepository.save(storyPrompt)
-      console.log('Saved to database:', result)
-
-      return result
-    } catch (error) {
-      console.error('Error in service:', error)
-      throw error
+    if (createStoryPromptDto.isActive) {
+      // Deactivate all other prompts first
+      await this.storyPromptRepository.update({}, { isActive: false })
     }
+    const prompt = this.storyPromptRepository.create(createStoryPromptDto)
+    return this.storyPromptRepository.save(prompt)
   }
 
   async getStoryPrompts(): Promise<StoryPrompt[]> {
