@@ -24,4 +24,10 @@ export class Tweet {
 
   @CreateDateColumn()
   createdAt: Date
+
+  @Column({ nullable: true })
+  chapter: number
+
+  @Column({ nullable: true })
+  caption: string
 }

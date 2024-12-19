@@ -7,6 +7,7 @@ import { AppController } from './app.controller'
 import { Tweet } from './entities/tweet.entity'
 import { ApiKeyGuard } from './guards/api-key.guard'
 import { Prompt } from './entities/prompt.entity'
+import { StoryPrompt } from './entities/story-prompt.entity'
 
 @Module({
   imports: [
@@ -36,7 +37,7 @@ import { Prompt } from './entities/prompt.entity'
           username: configService.get('DB_USER'),
           password: configService.get('DB_PASSWORD'),
           database: configService.get('DB_NAME'),
-          entities: [Tweet, Prompt],
+          entities: [Tweet, Prompt, StoryPrompt],
           synchronize: true,
           logging: true,
           // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -45,7 +46,7 @@ import { Prompt } from './entities/prompt.entity'
       },
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([Tweet, Prompt]),
+    TypeOrmModule.forFeature([Tweet, Prompt, StoryPrompt]),
   ],
   controllers: [AppController],
   providers: [AppService, ApiKeyGuard],

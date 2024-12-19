@@ -12,6 +12,10 @@ import {
 import { AppService } from './app.service'
 import { ApiKeyGuard } from './guards/api-key.guard'
 import { CreatePromptDto, UpdatePromptDto } from './dto/prompt.dto'
+import {
+  CreateStoryPromptDto,
+  UpdateStoryPromptDto,
+} from './dto/story-prompt.dto'
 
 @Controller('api')
 @UseGuards(ApiKeyGuard)
@@ -112,5 +116,34 @@ export class AppController {
   @Delete('prompts/:id')
   async deletePrompt(@Param('id') id: number) {
     return this.appService.deletePrompt(id)
+  }
+
+  // Story Prompts endpoints
+  @Post('story-prompts')
+  async createStoryPrompt(@Body() createStoryPromptDto: CreateStoryPromptDto) {
+    return this.appService.createStoryPrompt(createStoryPromptDto)
+  }
+
+  @Get('story-prompts')
+  async getStoryPrompts() {
+    return this.appService.getStoryPrompts()
+  }
+
+  @Get('story-prompts/active')
+  async getActiveStoryPrompt() {
+    return this.appService.getActiveStoryPrompt()
+  }
+
+  @Put('story-prompts/:id')
+  async updateStoryPrompt(
+    @Param('id') id: number,
+    @Body() updateStoryPromptDto: UpdateStoryPromptDto,
+  ) {
+    return this.appService.updateStoryPrompt(id, updateStoryPromptDto)
+  }
+
+  @Delete('story-prompts/:id')
+  async deleteStoryPrompt(@Param('id') id: number) {
+    return this.appService.deleteStoryPrompt(id)
   }
 }

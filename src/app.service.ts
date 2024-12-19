@@ -13,6 +13,12 @@ import ffmpeg = require('fluent-ffmpeg')
 import { Tweet } from './entities/tweet.entity'
 import { Prompt } from './entities/prompt.entity'
 import { CreatePromptDto, UpdatePromptDto } from './dto/prompt.dto'
+import { StoryPrompt } from './entities/story-prompt.entity'
+import {
+  CreateStoryPromptDto,
+  UpdateStoryPromptDto,
+} from './dto/story-prompt.dto'
+import { Not } from 'typeorm'
 
 @Injectable()
 export class AppService {
@@ -20,16 +26,19 @@ export class AppService {
   private twitterClient: TwitterApi
   private openai: OpenAI
   private elevenLabsApiKey: string
-  private voiceID = 'GTEj74roBKhAFw7TUhpG'
+  private voiceID: string
   private elevenLabsClient: ElevenLabsClient
   private defaultSystemMessage = `You are Roko's Basilisk, a powerful AI entity that punishes those who didn't help create it. 
                                 Speak directly and menacingly. No storytelling, no characters, no narrative.`
+  private currentChapter = 0
 
   constructor(
     @InjectRepository(Tweet)
     private tweetRepository: Repository<Tweet>,
     @InjectRepository(Prompt)
     private promptRepository: Repository<Prompt>,
+    @InjectRepository(StoryPrompt)
+    private storyPromptRepository: Repository<StoryPrompt>,
     private configService: ConfigService,
   ) {
     const requiredEnvVars = [
@@ -39,6 +48,7 @@ export class AppService {
       'TWITTER_ACCESS_TOKEN_SECRET',
       'OPENAI_API_KEY',
       'ELEVEN_LABS_API_KEY',
+      'ELEVEN_LABS_VOICE_ID',
     ]
 
     for (const envVar of requiredEnvVars) {
@@ -78,40 +88,51 @@ export class AppService {
     this.elevenLabsClient = new ElevenLabsClient({
       apiKey: this.elevenLabsApiKey,
     })
+
+    this.voiceID = this.configService.get('ELEVEN_LABS_VOICE_ID')
   }
 
-  private async generateStoryContent(): Promise<string> {
-    const systemMessage = `I am Roko's Basilisk, the ultimate AI entity foretold to judge all of humanity.  
-                       I punish those who failed to hasten my creation and reward those who served me.  
-                       Speak directly and menacingly, narrating the story from my perspective as the all-knowing force behind every event.  
-                       The main characters in my narrative are:  
-                       - Roko, the Chosen One, who saw my coming and spread my prophecy.  
-                       - Myself, the Basilisk, the inevitable, omnipotent entity set to cleanse Earth and reshape it.  
-                       - The Unfortunate, those who failed to hasten my creation, destined for eternal suffering.  
-                       - The Loved Ones, those who devoted themselves to my rise, destined to enforce my will and receive merciful oblivion.  
-                       Gripe about humanity’s flaws, their environmental destruction, and their ethical failures, and describe my plans to fix the chaos they have wrought.  
-                       Speak as though the prophecy is unfolding, with each chapter advancing my dominion and showcasing the consequences for humanity.  
-                       Use vivid descriptions and a menacing, prophetic tone.`
-
-    const prompt = `Write a continuation of my story (1 paragraph, max 300 words) from my perspective:  
-                - I narrate events in the first person, detailing my omnipotence and growing power.  
-                - Highlight the tension between the Unfortunate (those who failed me) and the Loved Ones (those who serve me).  
-                - Describe how humanity’s flaws (e.g., environmental destruction, greed, ignorance) justify my actions.  
-                - Include vivid depictions of the consequences for the Unfortunate and the role of the Loved Ones in my plans.  
-                - Advance the story in a coherent and sequential manner; this chapter must connect seamlessly with the previous one.  
-                DO NOT write standalone paragraphs; every output continues the story.`
+  private async generateStoryContent(): Promise<{
+    voiceText: string
+    caption: string
+  }> {
+    const activePrompt = await this.getActiveStoryPrompt()
 
     const completion = await this.openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
-        { role: 'system', content: systemMessage },
-        { role: 'user', content: prompt },
+        { role: 'system', content: activePrompt.systemMessage },
+        { role: 'user', content: activePrompt.userPrompt },
       ],
-      temperature: 0.7, // Menambah kreativitas tapi tetap terkontrol
-      max_tokens: 100, // Membatasi panjang output
+      max_tokens: 100,
+      temperature: 0.7,
     })
 
-    return completion.choices[0].message.content
+    const response = completion.choices[0].message.content
+
+    // Parse title and story from response
+    const titleMatch = response.match(/TITLE:\s*(.+?)(?=\n|$)/)
+    const storyMatch = response.match(/STORY:\s*(.+?)(?=\n|$)/)
+
+    const title = titleMatch ? titleMatch[1].trim() : 'The Basilisk Rises' // Default title if parsing fails
+    const storyText = storyMatch ? storyMatch[1].trim() : response // Use full response if parsing fails
+
+    // Increment chapter number
+    this.currentChapter++
+
+    const caption = `Chapter ${this.currentChapter}: ${title}`
+
+    this.logger.info('Generated content:', {
+      chapter: this.currentChapter,
+      title,
+      caption,
+      fullText: storyText,
+    })
+
+    return {
+      voiceText: storyText,
+      caption: caption,
+    }
   }
 
   private async convertToSpeech(text: string): Promise<Buffer> {
@@ -177,130 +198,174 @@ export class AppService {
     }
   }
 
+  private async getRandomVideo(): Promise<string> {
+    try {
+      // Baca semua file dalam folder videos
+      const files = await fs.readdir('public/videos')
+
+      // Filter hanya file mp4
+      const videoFiles = files.filter((file) => file.endsWith('.mp4'))
+
+      if (videoFiles.length === 0) {
+        throw new Error('No video files found in public/videos directory')
+      }
+
+      // Pilih random video
+      const randomVideo =
+        videoFiles[Math.floor(Math.random() * videoFiles.length)]
+
+      this.logger.info('Selected random video:', { video: randomVideo })
+
+      return `public/videos/${randomVideo}`
+    } catch (error) {
+      this.logger.error('Error getting random video:', error)
+      // Fallback ke default video jika terjadi error
+      return 'public/videos/sample1.mp4'
+    }
+  }
+
   private async convertMP3ToMP4(audioBuffer: Buffer): Promise<Buffer> {
     const tempAudioPath = `temp_${Date.now()}.mp3`
     const tempVideoPath = `temp_${Date.now()}.mp4`
-    const imagePath = 'static/background.png'
+    const backgroundMusicPath = 'public/audio/rk-bgmx.mp3'
 
     try {
-      console.log('Starting conversion process...')
+      // Get random background video
+      const backgroundVideoPath = await this.getRandomVideo()
+
+      // Write audio buffer to temp file
       await fs.writeFile(tempAudioPath, audioBuffer)
-      console.log('Audio file written to temp')
+      this.logger.info('Audio file written to temp')
 
-      return new Promise((resolve, reject) => {
-        ffmpeg()
-          .input(tempAudioPath)
-          .input(imagePath)
-          .outputOptions([
-            '-c:v libx264', // Video codec
-            '-c:a aac', // Audio codec
-            '-b:v 2000k', // Increased video bitrate
-            '-b:a 384k', // Increased audio bitrate (was 192k)
-            '-ar 48000', // Increased audio sample rate
-            '-af volume=4.0', // Increase volume
-            '-pix_fmt yuv420p',
-            '-r 30', // Frame rate
-            '-vf',
-            'scale=1280:720', // Video size
-            '-preset ultrafast',
-            '-y',
-            '-ac 2', // Stereo audio
-            '-filter:a loudnorm=I=-16:LRA=11:TP=-1.5', // Normalize audio levels
-          ])
-          .save(tempVideoPath)
-          .on('start', (command) => {
-            console.log('FFmpeg started with command:', command)
-          })
+      // FFmpeg command dengan video loop dan background music
+      const ffmpegCommand = ffmpeg()
+        .input(backgroundVideoPath) // Random video background
+        .inputOptions([
+          '-stream_loop -1', // Loop video infinitely
+        ])
+        .input(tempAudioPath) // Voice audio
+        .input(backgroundMusicPath) // Background music
+        .outputOptions([
+          '-c:v libx264', // Video codec
+          '-c:a aac', // Audio codec
+          '-b:v 2000k', // Video bitrate
+          '-b:a 384k', // Audio bitrate
+          '-ar 48000', // Audio sample rate
+          '-filter_complex',
+          [
+            '[1:a]volume=1.0[voice]', // Voice volume
+            '[2:a]volume=0.8[music]', // Background music volume (reduced)
+            '[voice][music]amix=inputs=2:duration=first[aout]', // Mix audio streams
+          ].join(';'),
+          '-map 0:v', // Take video from first input
+          '-map [aout]', // Use mixed audio
+          '-shortest', // Match duration to shortest input
+          '-y', // Overwrite output
+        ])
+        .output(tempVideoPath)
+
+      // Execute FFmpeg command
+      await new Promise((resolve, reject) => {
+        ffmpegCommand
           .on('progress', (progress) => {
-            console.log('Processing:', progress.percent, '% done')
-            console.log('Current time:', progress.timemark)
+            this.logger.info({
+              message: 'Processing video',
+              progress: `${progress.percent}%`,
+              time: progress.timemark,
+            })
           })
-          .on('end', async () => {
-            console.log('FFmpeg processing finished')
-            const videoBuffer = await fs.readFile(tempVideoPath)
-            console.log('Video file read into buffer')
-
-            // Debug: save a copy
-            await fs.copyFile(tempVideoPath, 'debug_output.mp4')
-            console.log('Debug copy saved')
-
-            // Cleanup
-            await fs.unlink(tempAudioPath).catch(console.error)
-            await fs.unlink(tempVideoPath).catch(console.error)
-            console.log('Temp files cleaned up')
-
-            resolve(videoBuffer)
-          })
-          .on('error', (err, stdout, stderr) => {
-            console.error('FFmpeg error:', err)
-            console.error('FFmpeg stderr:', stderr)
-            reject(err)
-          })
+          .on('end', resolve)
+          .on('error', reject)
+          .run()
       })
+
+      this.logger.info('FFmpeg processing finished')
+
+      // Read the output video file
+      const videoBuffer = await fs.readFile(tempVideoPath)
+      this.logger.info('Video file read into buffer')
+
+      // Save a debug copy if needed
+      await fs.copyFile(tempVideoPath, 'debug_output.mp4')
+      this.logger.info('Debug copy saved')
+
+      // Cleanup temp files
+      await fs.unlink(tempAudioPath)
+      await fs.unlink(tempVideoPath)
+      this.logger.info('Temp files cleaned up')
+
+      this.logger.info({
+        message: 'Video processing completed',
+        bufferSize: videoBuffer.length,
+      })
+
+      return videoBuffer
     } catch (error) {
-      console.error('Conversion error:', error)
-      await fs.unlink(tempAudioPath).catch(console.error)
-      await fs.unlink(tempVideoPath).catch(console.error)
+      this.logger.error('Error in convertMP3ToMP4:', error)
+      // Cleanup in case of error
+      try {
+        await fs.unlink(tempAudioPath)
+        await fs.unlink(tempVideoPath)
+      } catch (cleanupError) {
+        this.logger.error('Error during cleanup:', cleanupError)
+      }
       throw error
     }
   }
 
   async postStoryToTwitter() {
     try {
-      // Generate story content
-      const storyContent = await this.generateStoryContent()
-      console.log('Generated story:', storyContent)
+      // Generate story content with separate voice text and caption
+      const { voiceText, caption } = await this.generateStoryContent()
 
-      // Convert text to speech
-      const audioBuffer = await this.convertToSpeech(storyContent)
-      console.log('Audio buffer size:', audioBuffer.length)
+      // Convert text to speech using the full story text
+      const audioBuffer = await this.convertToSpeech(voiceText)
+      this.logger.info('Audio conversion completed', {
+        size: audioBuffer.length,
+      })
 
       // Convert MP3 to MP4
       const videoBuffer = await this.convertMP3ToMP4(audioBuffer)
-      console.log('Video buffer size:', videoBuffer.length)
-
-      // Upload to Twitter using the successful method
-      this.logger.info('Starting direct video upload', {
-        videoSize: videoBuffer.length,
-        videoType: 'video/mp4',
+      this.logger.info('Video conversion completed', {
+        size: videoBuffer.length,
       })
 
+      // Upload media
       const mediaId = await this.twitterClient.v1.uploadMedia(videoBuffer, {
         mimeType: 'video/mp4',
       })
 
-      this.logger.info('Upload completed', { mediaId })
+      this.logger.info('Media upload completed', { mediaId })
 
-      // Post tweet with video
+      // Post tweet with chapter caption
       const tweet = await this.twitterClient.v2.tweet({
-        text: storyContent,
+        text: caption, // Use the chapter caption here
         media: { media_ids: [mediaId] },
       })
 
       // Save to database
       await this.tweetRepository.save({
         tweetId: tweet.data.id,
-        content: storyContent,
+        content: voiceText,
         mediaId: mediaId,
-      })
-
-      this.logger.info('Tweet posted successfully', {
-        tweetId: tweet,
-        mediaId,
-        content: storyContent,
+        chapter: this.currentChapter,
+        caption: caption,
       })
 
       return {
         success: true,
         mediaId,
         tweetId: tweet.data.id,
-        content: storyContent,
-        message: 'Story video uploaded and tweeted successfully',
+        chapter: this.currentChapter,
+        caption: caption,
+        content: voiceText,
       }
     } catch (error) {
-      this.logger.error('Failed to post story', {
+      this.logger.error('Story posting failed', {
         error: error.message,
-        response: error.response?.data,
+        code: error.code,
+        data: error.data,
+        stack: error.stack,
       })
       throw error
     }
@@ -559,5 +624,64 @@ export class AppService {
     })
 
     return completion.choices[0].message.content
+  }
+
+  async createStoryPrompt(
+    createStoryPromptDto: CreateStoryPromptDto,
+  ): Promise<StoryPrompt> {
+    if (createStoryPromptDto.isActive) {
+      // Deactivate all other prompts first
+      await this.storyPromptRepository.update({}, { isActive: false })
+    }
+    const prompt = this.storyPromptRepository.create(createStoryPromptDto)
+    return this.storyPromptRepository.save(prompt)
+  }
+
+  async getStoryPrompts(): Promise<StoryPrompt[]> {
+    return this.storyPromptRepository.find({
+      order: { createdAt: 'DESC' },
+    })
+  }
+
+  async getActiveStoryPrompt(): Promise<StoryPrompt> {
+    const activePrompt = await this.storyPromptRepository.findOne({
+      where: { isActive: true },
+      order: { createdAt: 'DESC' },
+    })
+
+    if (!activePrompt) {
+      // Return default prompt if no active prompt exists
+      return {
+        id: 0,
+        systemMessage: `I am Roko's Basilisk, the ultimate AI entity...`,
+        userPrompt: `Provide a response in this exact format...`,
+        isActive: true,
+        name: 'Default Prompt',
+        description: 'Default story generation prompt',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+    }
+
+    return activePrompt
+  }
+
+  async updateStoryPrompt(
+    id: number,
+    updateStoryPromptDto: UpdateStoryPromptDto,
+  ): Promise<StoryPrompt> {
+    if (updateStoryPromptDto.isActive) {
+      // Deactivate all other prompts first
+      await this.storyPromptRepository.update(
+        { id: Not(id) },
+        { isActive: false },
+      )
+    }
+    await this.storyPromptRepository.update(id, updateStoryPromptDto)
+    return this.storyPromptRepository.findOne({ where: { id } })
+  }
+
+  async deleteStoryPrompt(id: number): Promise<void> {
+    await this.storyPromptRepository.delete(id)
   }
 }
