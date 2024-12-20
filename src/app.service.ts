@@ -122,7 +122,7 @@ export class AppService {
         { role: 'system', content: systemMessage },
         { role: 'user', content: userPrompt },
       ],
-      max_tokens: 500,
+      max_tokens: 200,
       temperature: 0.7,
     })
 
