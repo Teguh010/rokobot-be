@@ -19,6 +19,11 @@ import {
   UpdateStoryPromptDto,
 } from './dto/story-prompt.dto'
 import { Not } from 'typeorm'
+import * as path from 'path'
+
+interface FFmpegError extends Error {
+  spawnargs?: string[]
+}
 
 @Injectable()
 export class AppService {
@@ -243,122 +248,180 @@ export class AppService {
   }
 
   private async convertMP3ToMP4(audioBuffer: Buffer): Promise<Buffer> {
-    const tempAudioPath = `temp_${Date.now()}.mp3`
-    const tempVideoPath = `temp_${Date.now()}.mp4`
-    const backgroundMusicPath = 'public/audio/rk-bgmx.mp3'
+    const tempDir = path.join(process.cwd(), 'temp')
+    const tempAudioPath = path.join(tempDir, `audio_${Date.now()}.mp3`)
+    const tempVideoPath = path.join(tempDir, `video_${Date.now()}.mp4`)
+    const backgroundMusicPath = path.join(
+      process.cwd(),
+      'public/audio/rk-bgmx.mp3',
+    )
 
     try {
-      // Get random background video
+      // 1. Verify and create temp directory
+      await fs.mkdir(tempDir, { recursive: true })
+      const dirExists = await fs
+        .access(tempDir)
+        .then(() => true)
+        .catch(() => false)
+      if (!dirExists) {
+        throw new Error(`Temporary directory not created: ${tempDir}`)
+      }
+      this.logger.info('Temp directory verified:', { tempDir })
+
+      // 2. Get and verify background video
       const backgroundVideoPath = await this.getRandomVideo()
+      await fs.access(backgroundVideoPath).catch((err) => {
+        this.logger.error(
+          `Background video not found: ${backgroundVideoPath}`,
+          err,
+        )
+        throw new Error('Background video is missing')
+      })
+      this.logger.info('Background video verified:', { backgroundVideoPath })
 
-      // Write audio buffer to temp file
+      // 3. Write and verify audio file
       await fs.writeFile(tempAudioPath, audioBuffer)
-      this.logger.info('Audio file written to temp')
+      const stats = await fs.stat(tempAudioPath)
+      if (stats.size === 0) {
+        throw new Error(`Audio file is empty: ${tempAudioPath}`)
+      }
+      this.logger.info('Audio file written and verified:', {
+        path: tempAudioPath,
+        size: stats.size,
+      })
 
-      // FFmpeg command dengan video loop dan background music
-      const ffmpegCommand = ffmpeg()
-        .input(backgroundVideoPath)
-        .inputOptions([
-          '-stream_loop -1', // Loop video infinitely
-        ])
-        .input(tempAudioPath)
-        .input(backgroundMusicPath)
-        .outputOptions([
-          '-c:v libx264',
-          '-c:a aac',
-          '-b:v 2000k',
-          '-b:a 384k',
-          '-ar 48000',
-          '-filter_complex',
-          [
-            '[1:a]volume=1.0[voice]',
-            '[2:a]volume=0.8[music]',
-            '[voice][music]amix=inputs=2:duration=longest[aout]',
-          ].join(';'),
-          '-map 0:v',
-          '-map [aout]',
-          '-y',
-        ])
-        .output(tempVideoPath)
-
-      // Execute FFmpeg command
-      await new Promise((resolve, reject) => {
-        ffmpegCommand
+      // 4. FFmpeg processing
+      const result = await new Promise<Buffer>((resolve, reject) => {
+        ffmpeg()
+          .input(backgroundVideoPath)
+          .inputOptions(['-stream_loop -1', '-t 60'])
+          .input(tempAudioPath) // Gunakan path absolut
+          .input(backgroundMusicPath) // Gunakan path absolut
+          .outputOptions([
+            '-c:v libx264',
+            '-preset ultrafast',
+            '-crf 28',
+            '-b:v 1500k',
+            '-b:a 128k',
+            '-ar 44100',
+            '-filter_complex',
+            [
+              '[1:a]volume=1.0[voice]',
+              '[2:a]volume=0.8[music]',
+              '[voice][music]amix=inputs=2:duration=longest[aout]',
+            ].join(';'),
+            '-map 0:v',
+            '-map [aout]',
+            '-y',
+          ])
+          .output(tempVideoPath) // Gunakan path absolut
+          .on('start', (commandLine) => {
+            this.logger.info('FFmpeg command:', { commandLine })
+          })
           .on('progress', (progress) => {
-            this.logger.info({
-              message: 'Processing video',
-              progress: `${progress.percent}%`,
+            this.logger.info('Processing:', {
+              percent: progress.percent,
               time: progress.timemark,
             })
           })
-          .on('end', resolve)
-          .on('error', reject)
+          .on('error', (err: FFmpegError, stdout, stderr) => {
+            this.logger.error('FFmpeg error:', {
+              error: err.message,
+              stdout,
+              stderr,
+              command: err.spawnargs
+                ? err.spawnargs.join(' ')
+                : 'Command not available',
+            })
+            reject(err)
+          })
+          .on('end', async () => {
+            try {
+              const videoBuffer = await fs.readFile(tempVideoPath)
+              this.logger.info('Video processing completed:', {
+                path: tempVideoPath,
+                size: videoBuffer.length,
+              })
+              resolve(videoBuffer)
+            } catch (error) {
+              reject(error)
+            }
+          })
           .run()
       })
 
-      this.logger.info('FFmpeg processing finished')
-
-      // Read the output video file
-      const videoBuffer = await fs.readFile(tempVideoPath)
-      this.logger.info('Video file read into buffer')
-
-      // Save a debug copy if needed
-      await fs.copyFile(tempVideoPath, 'debug_output.mp4')
-      this.logger.info('Debug copy saved')
-
-      // Cleanup temp files
-      await fs.unlink(tempAudioPath)
-      await fs.unlink(tempVideoPath)
-      this.logger.info('Temp files cleaned up')
-
-      this.logger.info({
-        message: 'Video processing completed',
-        bufferSize: videoBuffer.length,
-      })
-
-      return videoBuffer
+      return result
     } catch (error) {
-      this.logger.error('Error in convertMP3ToMP4:', error)
-      // Cleanup in case of error
-      try {
-        await fs.unlink(tempAudioPath)
-        await fs.unlink(tempVideoPath)
-      } catch (cleanupError) {
-        this.logger.error('Error during cleanup:', cleanupError)
-      }
+      this.logger.error('Conversion error:', {
+        error: error.message,
+        stack: error.stack,
+      })
       throw error
+    } finally {
+      // Pindahkan cleanup ke sini, setelah FFmpeg selesai
+      try {
+        // Tunggu beberapa detik untuk memastikan FFmpeg selesai
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+
+        const cleanup = [tempAudioPath, tempVideoPath].map(async (file) => {
+          try {
+            await fs.access(file)
+            await fs.unlink(file)
+            this.logger.info('Cleaned up file:', { file })
+          } catch (e) {
+            // File doesn't exist, ignore
+          }
+        })
+        await Promise.all(cleanup)
+      } catch (error) {
+        this.logger.error('Cleanup error:', error)
+      }
     }
   }
 
   async postStoryToTwitter() {
     try {
-      // Generate story content with separate voice text and caption
+      // 1. Story Generation
+      console.time('generateStory')
+      this.logger.info('Starting story generation...')
       const { voiceText, caption } = await this.generateStoryContent()
+      this.logger.info('Story generated', { length: voiceText.length })
+      console.timeEnd('generateStory')
 
-      // Convert text to speech using the full story text
+      // 2. Text to Speech
+      console.time('textToSpeech')
+      this.logger.info('Starting speech conversion...')
       const audioBuffer = await this.convertToSpeech(voiceText)
-      this.logger.info('Audio conversion completed', {
-        size: audioBuffer.length,
+      this.logger.info('Speech conversion completed', {
+        audioSize: audioBuffer.length,
       })
+      console.timeEnd('textToSpeech')
 
-      // Convert MP3 to MP4
+      // 3. Video Processing
+      console.time('videoProcessing')
+      this.logger.info('Starting video conversion...')
       const videoBuffer = await this.convertMP3ToMP4(audioBuffer)
       this.logger.info('Video conversion completed', {
-        size: videoBuffer.length,
+        videoSize: videoBuffer.length,
       })
+      console.timeEnd('videoProcessing')
 
-      // Upload media
+      // 4. Twitter Upload
+      console.time('twitterUpload')
+      this.logger.info('Starting media upload to Twitter...')
       const mediaId = await this.twitterClient.v1.uploadMedia(videoBuffer, {
         mimeType: 'video/mp4',
       })
-
       this.logger.info('Media upload completed', { mediaId })
+      console.timeEnd('twitterUpload')
 
-      // Post tweet with chapter caption
+      // 5. Post Tweet
+      console.time('postTweet')
       const tweet = await this.twitterClient.v2.tweet({
-        text: caption, // Use the chapter caption here
+        text: caption,
         media: { media_ids: [mediaId] },
       })
+      console.timeEnd('postTweet')
 
       // Save to database
       await this.tweetRepository.save({

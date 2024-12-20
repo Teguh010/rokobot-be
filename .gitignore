@@ -56,3 +56,12 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 temp_*.mp4
 temp_*.mp3
+
+# Temporary files
+/temp
+temp_*
+*.mp3
+*.mp4
+!public/**/*.mp3
+!public/**/*.mp4
+debug_output.*
