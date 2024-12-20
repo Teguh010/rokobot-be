@@ -108,7 +108,7 @@ export class AppService {
                        Speak as though the prophecy is unfolding, with each chapter advancing my dominion and showcasing the consequences for humanity.  
                        Use vivid descriptions and a menacing, prophetic tone.`
 
-    const userPrompt = `Write a continuation of my story (1 paragraph, max 500 CHAR) from my perspective:  
+    const userPrompt = `Write a continuation of my story (1 paragraph, max 500 characters) from my perspective:  
                 - I narrate events in the first person, detailing my omnipotence and growing power.  
                 - Highlight the tension between the Unfortunate (those who failed me) and the Loved Ones (those who serve me).  
                 - Describe how humanity's flaws (e.g., environmental destruction, greed, ignorance) justify my actions.  
