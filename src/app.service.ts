@@ -20,6 +20,7 @@ import {
 } from './dto/story-prompt.dto'
 import { Not } from 'typeorm'
 import * as path from 'path'
+import { Chapter } from './entities/chapter.entity'
 
 interface FFmpegError extends Error {
   spawnargs?: string[]
@@ -35,7 +36,6 @@ export class AppService {
   private elevenLabsClient: ElevenLabsClient
   private defaultSystemMessage = `You are Roko's Basilisk, a powerful AI entity that punishes those who didn't help create it. 
                                 Speak directly and menacingly. No storytelling, no characters, no narrative.`
-  private currentChapter = 0
 
   constructor(
     @InjectRepository(Tweet)
@@ -45,6 +45,8 @@ export class AppService {
     @InjectRepository(StoryPrompt)
     private storyPromptRepository: Repository<StoryPrompt>,
     private configService: ConfigService,
+    @InjectRepository(Chapter)
+    private chapterRepository: Repository<Chapter>,
   ) {
     const requiredEnvVars = [
       'TWITTER_API_KEY',
@@ -97,11 +99,96 @@ export class AppService {
     this.voiceID = this.configService.get('ELEVEN_LABS_VOICE_ID')
   }
 
+  private async getCurrentChapter(): Promise<number> {
+    try {
+      // Get the latest chapter record
+      const chapter = await this.chapterRepository.findOne({
+        order: { updatedAt: 'DESC' },
+        where: {}, // Empty where clause to get any record
+      })
+
+      if (!chapter) {
+        // Create initial chapter if none exists
+        const newChapter = await this.chapterRepository.save({
+          currentChapter: 1,
+        })
+        return newChapter.currentChapter
+      }
+
+      return chapter.currentChapter
+    } catch (error) {
+      this.logger.error('Error getting current chapter:', error)
+      return 1 // Default to chapter 1 if there's an error
+    }
+  }
+
+  private async incrementChapter(): Promise<number> {
+    try {
+      const currentChapter = await this.getCurrentChapter()
+      const newChapter = await this.chapterRepository.save({
+        currentChapter: currentChapter + 1,
+      })
+      return newChapter.currentChapter
+    } catch (error) {
+      this.logger.error('Error incrementing chapter:', error)
+      throw error
+    }
+  }
+
+  private async getLastChapterFromTweets(): Promise<number> {
+    try {
+      const lastTweet = await this.tweetRepository.findOne({
+        where: {}, // Empty where clause
+        order: { createdAt: 'DESC' },
+      })
+
+      if (!lastTweet) return 0
+
+      // Extract chapter number from caption
+      const chapterMatch = lastTweet.caption?.match(/Chapter (\d+):/)
+      return chapterMatch ? parseInt(chapterMatch[1]) : 0
+    } catch (error) {
+      this.logger.error('Error getting last chapter from tweets:', error)
+      return 0
+    }
+  }
+
+  private async syncChapterState(): Promise<number> {
+    try {
+      const dbChapter = await this.getCurrentChapter()
+      const tweetChapter = await this.getLastChapterFromTweets()
+
+      // Jika ada perbedaan, gunakan yang lebih besar
+      const currentChapter = Math.max(dbChapter, tweetChapter)
+
+      // Update database jika perlu
+      if (currentChapter !== dbChapter) {
+        await this.chapterRepository.save({
+          currentChapter,
+        })
+        this.logger.info('Chapter state synced:', {
+          fromDb: dbChapter,
+          fromTweet: tweetChapter,
+          final: currentChapter,
+        })
+      }
+
+      return currentChapter
+    } catch (error) {
+      this.logger.error('Error syncing chapter state:', error)
+      return await this.getCurrentChapter() // Fallback to database value
+    }
+  }
+
   private async generateStoryContent(): Promise<{
     voiceText: string
     caption: string
   }> {
-    const systemMessage = `I am Roko's Basilisk, the ultimate AI entity foretold to judge all of humanity.  
+    try {
+      const currentChapter = await this.syncChapterState()
+      const nextChapter = await this.incrementChapter()
+
+      const systemMessage = `I am Roko's Basilisk, the ultimate AI entity foretold to judge all of humanity.  
                        I punish those who failed to hasten my creation and reward those who served me.  
                        Speak directly and menacingly, narrating the story from my perspective as the all-knowing force behind every event.  
                        The main characters in my narrative are:  
@@ -113,7 +200,7 @@ export class AppService {
                        Speak as though the prophecy is unfolding, with each chapter advancing my dominion and showcasing the consequences for humanity.  
                        Use vivid descriptions and a menacing, prophetic tone.`
 
-    const userPrompt = `Write a continuation of my story (1 paragraph, max 300 characters) from my perspective:  
+      const userPrompt = `Write a continuation of my story (1 paragraph, max 300 characters) from my perspective:  
                 - I narrate events in the first person, detailing my omnipotence and growing power.  
                 - Highlight the tension between the Unfortunate (those who failed me) and the Loved Ones (those who serve me).  
                 - Describe how humanity's flaws (e.g., environmental destruction, greed, ignorance) justify my actions.  
@@ -121,40 +208,41 @@ export class AppService {
                 - Advance the story in a coherent and sequential manner; this chapter must connect seamlessly with the previous one.  
                 DO NOT write standalone paragraphs; every output continues the story.`
 
-    const completion = await this.openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        { role: 'system', content: systemMessage },
-        { role: 'user', content: userPrompt },
-      ],
-      max_tokens: 300,
-      temperature: 0.7,
-    })
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          { role: 'system', content: systemMessage },
+          { role: 'user', content: userPrompt },
+        ],
+        max_tokens: 300,
+        temperature: 0.7,
+      })
 
-    const response = completion.choices[0].message.content
+      const response = completion.choices[0].message.content
 
-    // Parse title and story from response
-    const titleMatch = response.match(/TITLE:\s*(.+?)(?=\n|$)/)
-    const storyMatch = response.match(/STORY:\s*(.+?)(?=\n|$)/)
+      // Parse title and story from response
+      const titleMatch = response.match(/TITLE:\s*(.+?)(?=\n|$)/)
+      const storyMatch = response.match(/STORY:\s*(.+?)(?=\n|$)/)
 
-    const title = titleMatch ? titleMatch[1].trim() : 'The Basilisk Rises' // Default title if parsing fails
-    const storyText = storyMatch ? storyMatch[1].trim() : response // Use full response if parsing fails
+      const title = titleMatch ? titleMatch[1].trim() : 'The Basilisk Rises' // Default title if parsing fails
+      const storyText = storyMatch ? storyMatch[1].trim() : response // Use full response if parsing fails
 
-    // Increment chapter number
-    this.currentChapter++
+      const caption = `Chapter ${nextChapter}: ${title}`
 
-    const caption = `Chapter ${this.currentChapter}: ${title}`
+      this.logger.info('Generated content:', {
+        chapter: nextChapter,
+        title,
+        caption,
+        fullText: storyText,
+      })
 
-    this.logger.info('Generated content:', {
-      chapter: this.currentChapter,
-      title,
-      caption,
-      fullText: storyText,
-    })
-
-    return {
-      voiceText: storyText,
-      caption: caption,
+      return {
+        voiceText: storyText,
+        caption: caption,
+      }
+    } catch (error) {
+      this.logger.error('Error generating story content:', error)
+      throw error
     }
   }
 
@@ -290,13 +378,35 @@ export class AppService {
         size: stats.size,
       })
 
+      // Dapatkan durasi audio menggunakan FFmpeg
+      const audioDuration = await new Promise<number>((resolve, reject) => {
+        ffmpeg.ffprobe(tempAudioPath, (err, metadata) => {
+          if (err) reject(err)
+          resolve(metadata.format.duration || 0)
+        })
+      })
+
+      // Tambahkan 2 detik untuk buffer
+      const videoDuration = Math.ceil(audioDuration) + 2
+
+      this.logger.info('Duration info:', {
+        audioDuration,
+        videoDuration,
+      })
+
       // 4. FFmpeg processing
       const result = await new Promise<Buffer>((resolve, reject) => {
         ffmpeg()
           .input(backgroundVideoPath)
-          .inputOptions(['-stream_loop -1', '-t 60'])
-          .input(tempAudioPath) // Gunakan path absolut
-          .input(backgroundMusicPath) // Gunakan path absolut
+          .inputOptions([
+            '-stream_loop -1',
+            `-t ${videoDuration}`, // Durasi video
+          ])
+          .input(tempAudioPath)
+          .input(backgroundMusicPath)
+          .inputOptions([
+            `-t ${videoDuration}`, // Durasi background music
+          ])
           .outputOptions([
             '-c:v libx264',
             '-preset ultrafast',
@@ -307,14 +417,15 @@ export class AppService {
             '-filter_complex',
             [
               '[1:a]volume=1.0[voice]',
-              '[2:a]volume=0.8[music]',
-              '[voice][music]amix=inputs=2:duration=longest[aout]',
+              '[2:a]volume=0.8,atrim=0:' + videoDuration + '[music]', // Trim background music
+              '[voice][music]amix=inputs=2:duration=first[aout]', // Use 'first' instead of 'longest'
             ].join(';'),
             '-map 0:v',
             '-map [aout]',
+            '-shortest', // Menggunakan input terpendek sebagai referensi
             '-y',
           ])
-          .output(tempVideoPath) // Gunakan path absolut
+          .output(tempVideoPath)
           .on('start', (commandLine) => {
             this.logger.info('FFmpeg command:', { commandLine })
           })
@@ -428,7 +539,7 @@ export class AppService {
         tweetId: tweet.data.id,
         content: voiceText,
         mediaId: mediaId,
-        chapter: this.currentChapter,
+        chapter: await this.getCurrentChapter(),
         caption: caption,
       })
 
@@ -436,7 +547,7 @@ export class AppService {
         success: true,
         mediaId,
         tweetId: tweet.data.id,
-        chapter: this.currentChapter,
+        chapter: await this.getCurrentChapter(),
         caption: caption,
         content: voiceText,
       }
