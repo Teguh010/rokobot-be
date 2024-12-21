@@ -189,8 +189,8 @@ export class AppService {
       // const currentChapter = await this.syncChapterState()
       const nextChapter = await this.incrementChapter()
 
-      // Get active prompt
-      const activePrompt = await this.getActiveStoryPrompt()
+      // Get active prompt with type STORY
+      const activePrompt = await this.getActiveStoryPrompt(PostType.STORY)
 
       // Replace placeholder with actual chapter number
       const userPrompt = activePrompt.userPrompt.replace(
@@ -829,7 +829,7 @@ export class AppService {
     })
   }
 
-  async getActiveStoryPrompt(type: PostType): Promise<StoryPrompt> {
+  async getActiveStoryPrompt(type: PostType = PostType.STORY): Promise<StoryPrompt> {
     const activePrompt = await this.storyPromptRepository.findOne({
       where: { 
         isActive: true,
@@ -879,8 +879,7 @@ export class AppService {
     await this.storyPromptRepository.delete(id)
   }
 
-  @Post('post-content')
-  async postContent(@Body() { type }: { type: PostType }) {
+  async postContent(type: PostType): Promise<any> {
     try {
       if (type === PostType.STORY) {
         return await this.postStoryToTwitter();

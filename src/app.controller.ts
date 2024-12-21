@@ -8,8 +8,6 @@ import {
   Body,
   Put,
   Delete,
-  HttpException,
-  HttpStatus,
 } from '@nestjs/common'
 import { AppService } from './app.service'
 import { ApiKeyGuard } from './guards/api-key.guard'
@@ -18,6 +16,7 @@ import {
   CreateStoryPromptDto,
   UpdateStoryPromptDto,
 } from './dto/story-prompt.dto'
+import { PostType } from './enums/post-type.enum'
 
 @Controller('api')
 @UseGuards(ApiKeyGuard)
@@ -132,8 +131,8 @@ export class AppController {
   }
 
   @Get('story-prompts/active')
-  getActiveStoryPrompt() {
-    return this.appService.getActiveStoryPrompt()
+  getActiveStoryPrompt(@Query('type') type: PostType = PostType.STORY) {
+    return this.appService.getActiveStoryPrompt(type)
   }
 
   @Put('story-prompts/:id')
@@ -147,5 +146,10 @@ export class AppController {
   @Delete('story-prompts/:id')
   deleteStoryPrompt(@Param('id') id: number) {
     return this.appService.deleteStoryPrompt(id)
+  }
+
+  @Post('post-content')
+  async postContent(@Body() { type }: { type: PostType }) {
+    return this.appService.postContent(type)
   }
 }
