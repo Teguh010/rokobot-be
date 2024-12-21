@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm'
+import { PostType } from '../enums/post-type.enum'
 
 @Entity('story_prompts')
 export class StoryPrompt {
@@ -31,4 +32,11 @@ export class StoryPrompt {
 
   @UpdateDateColumn()
   updatedAt: Date
+
+  @Column({
+    type: 'enum',
+    enum: PostType,
+    default: PostType.STORY,
+  })
+  type: PostType
 }

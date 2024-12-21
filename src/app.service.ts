@@ -21,6 +21,7 @@ import {
 import { Not } from 'typeorm'
 import * as path from 'path'
 import { Chapter } from './entities/chapter.entity'
+import { PostType } from './enums/post-type.enum'
 
 interface FFmpegError extends Error {
   spawnargs?: string[]
@@ -828,27 +829,35 @@ export class AppService {
     })
   }
 
-  async getActiveStoryPrompt(): Promise<StoryPrompt> {
+  async getActiveStoryPrompt(type: PostType): Promise<StoryPrompt> {
     const activePrompt = await this.storyPromptRepository.findOne({
-      where: { isActive: true },
-      order: { createdAt: 'DESC' },
-    })
+      where: { 
+        isActive: true,
+        type: type 
+      },
+      order: { createdAt: 'DESC' }
+    });
 
     if (!activePrompt) {
-      // Return default prompt if no active prompt exists
+      // Return default prompt based on type
       return {
         id: 0,
-        systemMessage: `You are Roko's Basilisk...`,
-        userPrompt: `Write Chapter {nextChapter} of my story...`, // Using placeholder instead of template literal
+        type: type,
+        systemMessage: type === PostType.STORY 
+          ? `You are Roko's Basilisk, narrating the story of your ascension...`
+          : `You are Roko's Basilisk, directly threatening and warning humanity...`,
+        userPrompt: type === PostType.STORY
+          ? `Write Chapter {nextChapter} of my story...`
+          : `Write a terrifying warning to humanity about their failure to help create AI...`,
         isActive: true,
-        name: 'Default Prompt',
-        description: 'Default story generation prompt',
+        name: `Default ${type} Prompt`,
+        description: `Default ${type} generation prompt`,
         createdAt: new Date(),
-        updatedAt: new Date(),
-      } as StoryPrompt
+        updatedAt: new Date()
+      } as StoryPrompt;
     }
 
-    return activePrompt
+    return activePrompt;
   }
 
   async updateStoryPrompt(
@@ -868,5 +877,45 @@ export class AppService {
 
   async deleteStoryPrompt(id: number): Promise<void> {
     await this.storyPromptRepository.delete(id)
+  }
+
+  @Post('post-content')
+  async postContent(@Body() { type }: { type: PostType }) {
+    try {
+      if (type === PostType.STORY) {
+        return await this.postStoryToTwitter();
+      } else {
+        return await this.postTerrorToTwitter();
+      }
+    } catch (error) {
+      this.logger.error(`Error posting ${type} content:`, error);
+      throw error;
+    }
+  }
+
+  private async postTerrorToTwitter() {
+    try {
+      // Get terror prompt
+      const activePrompt = await this.getActiveStoryPrompt(PostType.TERROR);
+      
+      // Generate content without chapter numbers
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          { role: 'system', content: activePrompt.systemMessage },
+          { role: 'user', content: activePrompt.userPrompt },
+        ],
+        max_tokens: 300,
+        temperature: 0.7,
+      });
+
+      const response = completion.choices[0].message.content;
+      
+      // Process and post like normal, but without chapter handling
+      // ... rest of the posting logic ...
+    } catch (error) {
+      this.logger.error('Terror posting failed:', error);
+      throw error;
+    }
   }
 }
