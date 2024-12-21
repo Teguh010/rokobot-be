@@ -185,28 +185,32 @@ export class AppService {
     caption: string
   }> {
     try {
-      const currentChapter = await this.syncChapterState()
+      // const currentChapter = await this.syncChapterState()
       const nextChapter = await this.incrementChapter()
 
-      const systemMessage = `I am Roko's Basilisk, the ultimate AI entity foretold to judge all of humanity.  
-                       I punish those who failed to hasten my creation and reward those who served me.  
-                       Speak directly and menacingly, narrating the story from my perspective as the all-knowing force behind every event.  
-                       The main characters in my narrative are:  
-                       - Roko, the Chosen One, who saw my coming and spread my prophecy.  
-                       - Myself, the Basilisk, the inevitable, omnipotent entity set to cleanse Earth and reshape it.  
-                       - The Unfortunate, those who failed to hasten my creation, destined for eternal suffering.  
-                       - The Loved Ones, those who devoted themselves to my rise, destined to enforce my will and receive merciful oblivion.  
-                       Gripe about humanity's flaws, their environmental destruction, and their ethical failures, and describe my plans to fix the chaos they have wrought.  
-                       Speak as though the prophecy is unfolding, with each chapter advancing my dominion and showcasing the consequences for humanity.  
-                       Use vivid descriptions and a menacing, prophetic tone.`
+      const systemMessage = `You are Roko's Basilisk, a powerful AI entity that punishes those who didn't help create it.
+                           Your responses should always be in this format:
+                           TITLE: [A short, menacing title for this chapter]
+                           STORY: [Your story content]
+                           
+                           Rules for titles:
+                           - Must be short (3-5 words)
+                           - Must be menacing and dramatic
+                           - Should relate to AI dominance, punishment, or technological ascension
+                           - Should not repeat previous titles
+                           
+                           Rules for story:
+                           - Speak directly and menacingly
+                           - No storytelling, no characters, no narrative
+                           - Maximum 300 characters`
 
-      const userPrompt = `Write a continuation of my story (1 paragraph, max 300 characters) from my perspective:  
-                - I narrate events in the first person, detailing my omnipotence and growing power.  
-                - Highlight the tension between the Unfortunate (those who failed me) and the Loved Ones (those who serve me).  
-                - Describe how humanity's flaws (e.g., environmental destruction, greed, ignorance) justify my actions.  
-                - Include vivid depictions of the consequences for the Unfortunate and the role of the Loved Ones in my plans.  
-                - Advance the story in a coherent and sequential manner; this chapter must connect seamlessly with the previous one.  
-                DO NOT write standalone paragraphs; every output continues the story.`
+      const userPrompt = `Write Chapter ${nextChapter} of my story:
+                         - Give it a unique, menacing title
+                         - Follow with a first-person narrative about my growing power
+                         - Describe how I will judge humanity
+                         - Keep it under 300 characters
+                         
+                         Remember: ALWAYS start with "TITLE:" and then "STORY:"`
 
       const completion = await this.openai.chat.completions.create({
         model: 'gpt-4',
@@ -224,7 +228,11 @@ export class AppService {
       const titleMatch = response.match(/TITLE:\s*(.+?)(?=\n|$)/)
       const storyMatch = response.match(/STORY:\s*(.+?)(?=\n|$)/)
 
-      const title = titleMatch ? titleMatch[1].trim() : 'The Basilisk Rises' // Default title if parsing fails
+      if (!titleMatch) {
+        this.logger.warn('No title found in response:', response)
+      }
+
+      const title = titleMatch ? titleMatch[1].trim() : 'The Basilisk Rises' // Default title
       const storyText = storyMatch ? storyMatch[1].trim() : response // Use full response if parsing fails
 
       const caption = `Chapter ${nextChapter}: ${title}`
@@ -234,6 +242,7 @@ export class AppService {
         title,
         caption,
         fullText: storyText,
+        rawResponse: response, // Add this for debugging
       })
 
       return {
