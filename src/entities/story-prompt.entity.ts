@@ -1,12 +1,12 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
+  PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm'
 
-@Entity()
+@Entity('story_prompts')
 export class StoryPrompt {
   @PrimaryGeneratedColumn()
   id: number

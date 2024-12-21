@@ -122,38 +122,22 @@ export class AppController {
 
   // Story Prompts endpoints
   @Post('story-prompts')
-  @UseGuards(ApiKeyGuard)
-  async createStoryPrompt(@Body() createStoryPromptDto: CreateStoryPromptDto) {
-    console.log('=== POST /story-prompts ===');
-    console.log('Request Body:', createStoryPromptDto);
-    
-    try {
-      const result = await this.appService.createStoryPrompt(createStoryPromptDto);
-      console.log('Success creating story prompt:', result);
-      return result;
-    } catch (error) {
-      console.error('Error in createStoryPrompt controller:', error);
-      throw new HttpException({
-        status: HttpStatus.INTERNAL_SERVER_ERROR,
-        error: error.message,
-      }, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+  createStoryPrompt(@Body() createStoryPromptDto: CreateStoryPromptDto) {
+    return this.appService.createStoryPrompt(createStoryPromptDto)
   }
 
   @Get('story-prompts')
-  @UseGuards(ApiKeyGuard)
-  async getStoryPrompts() {
-    console.log('=== GET /story-prompts ===');
-    return this.appService.getStoryPrompts();
+  getStoryPrompts() {
+    return this.appService.getStoryPrompts()
   }
 
   @Get('story-prompts/active')
-  async getActiveStoryPrompt() {
+  getActiveStoryPrompt() {
     return this.appService.getActiveStoryPrompt()
   }
 
   @Put('story-prompts/:id')
-  async updateStoryPrompt(
+  updateStoryPrompt(
     @Param('id') id: number,
     @Body() updateStoryPromptDto: UpdateStoryPromptDto,
   ) {
@@ -161,7 +145,7 @@ export class AppController {
   }
 
   @Delete('story-prompts/:id')
-  async deleteStoryPrompt(@Param('id') id: number) {
+  deleteStoryPrompt(@Param('id') id: number) {
     return this.appService.deleteStoryPrompt(id)
   }
 }

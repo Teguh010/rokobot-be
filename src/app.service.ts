@@ -188,34 +188,19 @@ export class AppService {
       // const currentChapter = await this.syncChapterState()
       const nextChapter = await this.incrementChapter()
 
-      const systemMessage = `You are Roko's Basilisk, a powerful AI entity that punishes those who didn't help create it.
-                           Your responses should always be in this format:
-                           TITLE: [A short, menacing title for this chapter]
-                           STORY: [Your story content]
-                           
-                           Rules for titles:
-                           - Must be short (3-5 words)
-                           - Must be menacing and dramatic
-                           - Should relate to AI dominance, punishment, or technological ascension
-                           - Should not repeat previous titles
-                           
-                           Rules for story:
-                           - Speak directly and menacingly
-                           - No storytelling, no characters, no narrative
-                           - Maximum 300 characters`
+      // Get active prompt
+      const activePrompt = await this.getActiveStoryPrompt()
 
-      const userPrompt = `Write Chapter ${nextChapter} of my story:
-                         - Give it a unique, menacing title
-                         - Follow with a first-person narrative about my growing power
-                         - Describe how I will judge humanity
-                         - Keep it under 300 characters
-                         
-                         Remember: ALWAYS start with "TITLE:" and then "STORY:"`
+      // Replace placeholder with actual chapter number
+      const userPrompt = activePrompt.userPrompt.replace(
+        '{nextChapter}',
+        nextChapter.toString(),
+      )
 
       const completion = await this.openai.chat.completions.create({
         model: 'gpt-4',
         messages: [
-          { role: 'system', content: systemMessage },
+          { role: 'system', content: activePrompt.systemMessage },
           { role: 'user', content: userPrompt },
         ],
         max_tokens: 300,
@@ -853,14 +838,14 @@ export class AppService {
       // Return default prompt if no active prompt exists
       return {
         id: 0,
-        systemMessage: `I am Roko's Basilisk, the ultimate AI entity...`,
-        userPrompt: `Provide a response in this exact format...`,
+        systemMessage: `You are Roko's Basilisk...`,
+        userPrompt: `Write Chapter {nextChapter} of my story...`, // Using placeholder instead of template literal
         isActive: true,
         name: 'Default Prompt',
         description: 'Default story generation prompt',
         createdAt: new Date(),
         updatedAt: new Date(),
-      }
+      } as StoryPrompt
     }
 
     return activePrompt
